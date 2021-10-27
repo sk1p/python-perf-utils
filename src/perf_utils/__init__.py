@@ -15,7 +15,7 @@ def get_children(main_process):
 
 
 @contextlib.contextmanager
-def perf(name, args=None):
+def perf(name, args=None, output_dir="profiles"):
     main_pid = os.getpid()
     main_process = psutil.Process(pid=main_pid)
     children = get_children(main_process)
@@ -28,7 +28,7 @@ def perf(name, args=None):
     perf_proc = subprocess.Popen(
         ["perf", "record", "-F", "max", "-g", "-p", pids] + args
     )
-    # FIXME: how else do we wait until perf has started up? check stdout?
+    # FIXME: how else do we wait until perf has started up?
     time.sleep(0.1)
     try:
         yield
@@ -36,7 +36,8 @@ def perf(name, args=None):
         perf_proc.send_signal(signal.SIGINT)
         perf_proc.wait()
 
-        # FIXME: name must not contain special chars and is assumed to come
-        # from a trusted source
-        flame_cmd = f"perf script | stackcollapse-perf.pl | flamegraph.pl > profiles/{name}.svg" # noqa: 501
-        subprocess.run(flame_cmd, shell=True, check=True)
+        fname_out = os.path.join(output_dir, f"{name}.svg")
+        flame_cmd = "perf script | stackcollapse-perf.pl | flamegraph.pl"
+        with open(fname_out, "wb") as f_out:
+            p = subprocess.run(flame_cmd, shell=True, check=True, capture_output=True)
+            f_out.write(p.stdout)
