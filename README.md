@@ -17,4 +17,4 @@ with perf(name="something"):
 The `perf` decorator will then write a flamegraph to `./profiles/<name>.svg`.
 
 Needs to have `perf`, `stackcollapse-perf.pl` and `flamegraph.pl` installed and
-available in the `$PATH`.
+available in the `$PATH` (the latter two from https://github.com/brendangregg/FlameGraph)
