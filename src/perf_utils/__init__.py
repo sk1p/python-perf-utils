@@ -1,8 +1,10 @@
 import os
+import sys
 import time
 import signal
 import contextlib
 import subprocess
+import base64
 from tempfile import TemporaryDirectory
 
 import psutil
@@ -13,6 +15,19 @@ def get_children(main_process):
         pr for pr in psutil.process_iter() if pr.ppid() == main_process.pid
     ]
     return children
+
+
+class PerfResult:
+    def __init__(self, flamegraph_path: str):
+        self.flamegraph_path = flamegraph_path
+
+    def show(self):
+        from IPython.display import SVG
+        with open(self.flamegraph_path, "rb") as f:
+            raw_svg = f.read()
+            encoded = base64.standard_b64encode(raw_svg).decode("ascii")
+        url = f"data:image/svg+xml;base64,{encoded}"
+        return SVG(url=url)
 
 
 @contextlib.contextmanager
@@ -29,25 +44,28 @@ def perf(name, args=None, output_dir="profiles"):
 
     with TemporaryDirectory(prefix="perf_data") as perf_data_dir:
         perf_proc = subprocess.Popen(
-            ["perf", "record", "-F", "max", "-g", "-p", pids] + args,
+            ["perf", "record", "-o", "perf.data", "-F", "max", "-g", "-p", pids] + args,
             cwd=perf_data_dir,
         )
         # FIXME: how else do we wait until perf has started up?
         time.sleep(0.1)
+        fname_out = os.path.join(output_dir, f"{name}.svg")
         try:
-            yield
+            yield PerfResult(fname_out)
         finally:
             perf_proc.send_signal(signal.SIGINT)
             perf_proc.wait()
 
-            fname_out = os.path.join(output_dir, f"{name}.svg")
             flame_cmd = "perf script | stackcollapse-perf.pl | flamegraph.pl"
-            with open(fname_out, "wb") as f_out:
-                p = subprocess.run(
-                    flame_cmd,
-                    shell=True,
-                    check=True,
-                    capture_output=True,
-                    cwd=perf_data_dir,
-                )
-                f_out.write(p.stdout)
+            with open(os.path.join(perf_data_dir, "perf.data"), "rb") as perf_data:
+                with open(fname_out, "wb") as f_out:
+                    p = subprocess.run(
+                        flame_cmd,
+                        shell=True,
+                        check=True,
+                        stdin=perf_data,
+                        stdout=subprocess.PIPE,
+                        stderr=sys.stderr,
+                        cwd=perf_data_dir,
+                    )
+                    f_out.write(p.stdout)
