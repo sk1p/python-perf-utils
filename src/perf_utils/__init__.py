@@ -69,3 +69,21 @@ def perf(name, args=None, output_dir="profiles"):
                         cwd=perf_data_dir,
                     )
                     f_out.write(p.stdout)
+
+
+@contextlib.contextmanager
+def timer(name=None, nbytes=None):
+    t0 = time.perf_counter()
+    yield
+    t1 = time.perf_counter()
+    delta = t1 - t0
+
+    parts = ["timer"]
+    if name:
+        parts.append(name)
+    parts.append(f"{delta:.5f}s")
+    if nbytes:
+        throughput = nbytes / delta
+        parts.append(f"{throughput/1024/1024/1024:.4f}GiB/s")
+
+    print(" ".join(parts))
